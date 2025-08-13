@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Text Analysis — Summarize · Sentiment · Keywords</title>
+    <style>
+      :root {
+        --bg: #f6f8fb;
+        --card: #ffffff;
+        --muted: #667085;
+        --accent: #3b82f6; /* blue */
+        --accent-2: #06b6d4; /* teal */
+        --success: #10b981;
+        --danger: #ef4444;
+        --radius: 12px;
+        --shadow: 0 6px 20px rgba(15, 23, 42, 0.08);
+        --glass: linear-gradient(
+          180deg,
+          rgba(255, 255, 255, 0.9),
+          rgba(255, 255, 255, 0.85)
+        );
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+          Roboto, "Helvetica Neue", Arial;
+        background: var(--bg);
+        color: #0f172a;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        padding: 24px;
+        display: flex;
+        justify-content: center;
+      }
+
+      .app {
+        width: 100%;
+        max-width: 1100px;
+        display: grid;
+        grid-template-columns: 1fr 420px;
+        gap: 24px;
+        align-items: start;
+      }
+
+      /* responsive: single-column on small screens */
+      @media (max-width: 900px) {
+        .app {
+          grid-template-columns: 1fr;
+          padding-bottom: 40px;
+        }
+      }
+
+      .panel {
+        background: var(--card);
+        border-radius: var(--radius);
+        padding: 20px;
+        box-shadow: var(--shadow);
+      }
+
+      header.app-header {
+        grid-column: 1 / -1;
+        text-align: left;
+        margin-bottom: 6px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      header .title {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+      }
+      .logo {
+        width: 48px;
+        height: 48px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, var(--accent), var(--accent-2));
+        color: white;
+        font-weight: 700;
+        font-size: 18px;
+        box-shadow: 0 6px 18px rgba(59, 130, 246, 0.18);
+      }
+      h1 {
+        font-size: 20px;
+        margin: 0;
+      }
+      p.lead {
+        color: var(--muted);
+        margin: 0;
+        font-size: 13px;
+      }
+
+      /* editor */
+      .editor textarea {
+        width: 100%;
+        min-height: 240px;
+        border-radius: 10px;
+        padding: 14px;
+        border: 1px solid rgba(15, 23, 42, 0.06);
+        font-size: 15px;
+        resize: vertical;
+        background: transparent;
+        color: inherit;
+        outline: none;
+      }
+      .actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 12px;
+      }
+      .btn {
+        background: linear-gradient(180deg, var(--accent), #2563eb);
+        color: white;
+        padding: 10px 14px;
+        border-radius: 10px;
+        border: none;
+        cursor: pointer;
+        font-weight: 600;
+        box-shadow: 0 8px 18px rgba(37, 99, 235, 0.12);
+        transition: transform 0.12s ease, box-shadow 0.12s;
+      }
+      .btn.secondary {
+        background: transparent;
+        color: #0f172a;
+        border: 1px solid rgba(15, 23, 42, 0.06);
+        box-shadow: none;
+      }
+      .btn:active {
+        transform: translateY(1px) scale(0.998);
+      }
+
+      .right-col {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .card-title {
+        font-size: 13px;
+        color: var(--muted);
+        margin-bottom: 8px;
+      }
+      .result-card {
+        background: var(--glass);
+        border-radius: 10px;
+        padding: 14px;
+        border: 1px solid rgba(15, 23, 42, 0.03);
+        min-height: 68px;
+      }
+
+      .result-label {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+      .chip {
+        font-size: 12px;
+        padding: 6px 8px;
+        border-radius: 8px;
+        background: rgba(15, 23, 42, 0.04);
+      }
+
+      /* spinner */
+      .spinner {
+        display: inline-flex;
+        gap: 10px;
+        align-items: center;
+        font-size: 14px;
+        color: var(--muted);
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--accent);
+        animation: bounce 0.9s infinite ease-in-out;
+      }
+      .dot:nth-child(2) {
+        animation-delay: 0.12s;
+        background: var(--accent-2);
+      }
+      .dot:nth-child(3) {
+        animation-delay: 0.24s;
+        background: var(--success);
+      }
+
+      @keyframes bounce {
+        0%,
+        80%,
+        100% {
+          transform: translateY(0);
+          opacity: 0.6;
+        }
+        40% {
+          transform: translateY(-8px);
+          opacity: 1;
+        }
+      }
+
+      /* results layout */
+      .results-grid {
+        display: grid;
+        gap: 12px;
+      }
+      @media (min-width: 900px) {
+        .results-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .summary {
+        font-size: 15px;
+        line-height: 1.5;
+        color: #05264c;
+      }
+      .meta {
+        color: var(--muted);
+        font-size: 13px;
+        margin-top: 6px;
+      }
+
+      footer.note {
+        margin-top: 18px;
+        font-size: 13px;
+        color: var(--muted);
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app" role="application">
+      <header class="app-header" style="grid-column: 1 / -1">
+        <div class="title">
+          <div class="logo">TA</div>
+          <div>
+            <h1>Text Analysis</h1>
+            <p class="lead">
+              Summarization · Sentiment analysis · Keyword extraction
+            </p>
+          </div>
+        </div>
+        <div style="text-align: right">
+          <div style="font-size: 13px; color: var(--muted)"></div>
+        </div>
+      </header>
+
+      <!-- LEFT: editor & controls -->
+      <section class="panel editor">
+        <div
+          style="
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+          "
+        >
+          <div style="min-width: 0">
+            <div style="font-weight: 700">Enter text</div>
+            <div style="color: var(--muted); font-size: 13px">
+              Paste a paragraph, article excerpt, or your text below.
+            </div>
+          </div>
+          <div style="font-size: 12px; color: var(--muted)">
+            Model: transformers
+          </div>
+        </div>
+
+        <textarea id="inputText" placeholder="Paste text here..."></textarea>
+
+        <div class="actions">
+          <button
+            class="btn"
+            id="btnAnalyzeAll"
+            onclick="callAPI('analyze_all')"
+          >
+            Analyze All
+          </button>
+          <button
+            class="btn secondary"
+            id="btnSumm"
+            onclick="callAPI('summarize')"
+          >
+            Summarize
+          </button>
+          <button
+            class="btn secondary"
+            id="btnSent"
+            onclick="callAPI('sentiment')"
+          >
+            Sentiment
+          </button>
+          <button
+            class="btn secondary"
+            id="btnKeys"
+            onclick="callAPI('keywords')"
+          >
+            Keywords
+          </button>
+          <button class="btn secondary" onclick="clearAll()">Clear</button>
+        </div>
+
+        <div
+          style="margin-top: 12px; display: flex; gap: 8px; align-items: center"
+        >
+          <div id="status" style="flex: 1"></div>
+          <div style="font-size: 13px; color: var(--muted)">
+            Tip: longer paragraphs produce better summaries & keywords.
+          </div>
+        </div>
+        <br />
+        <!-- History Panel -->
+        <div class="panel">
+          <div class="card-title">History</div>
+          <div id="historyCard" class="result-card">
+            <div id="historyList" class="meta">No history yet.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- RIGHT: results -->
+      <aside class="right-col">
+        <div class="panel">
+          <div class="card-title">Summary</div>
+          <div id="summaryCard" class="result-card">
+            <div class="summary" id="summaryText">
+              No summary yet — try "Summarize" or "Analyze All".
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="card-title">Sentiment</div>
+          <div id="sentimentCard" class="result-card">
+            <div style="display: flex; flex-direction: column; gap: 6px">
+              <div id="sentimentLabel" style="font-weight: 700">—</div>
+              <div class="meta" id="sentimentMeta">
+                Model will return label & confidence.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="card-title">Keywords</div>
+          <div id="keywordsCard" class="result-card">
+            <div id="keywordsList" class="meta">No keywords yet.</div>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <script>
+      const statusEl = document.getElementById("status");
+      const summaryText = document.getElementById("summaryText");
+      const sentimentLabel = document.getElementById("sentimentLabel");
+      const sentimentMeta = document.getElementById("sentimentMeta");
+      const keywordsList = document.getElementById("keywordsList");
+      const inputText = document.getElementById("inputText");
+
+      function showSpinner(msg = "Processing…") {
+        statusEl.innerHTML = `<div class="spinner"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div style="margin-left:8px">${msg}</div></div>`;
+      }
+      function hideSpinner() {
+        statusEl.innerHTML = "";
+      }
+
+      function clearAll() {
+        inputText.value = "";
+        summaryText.textContent =
+          'No summary yet — try "Summarize" or "Analyze All".';
+        sentimentLabel.textContent = "—";
+        sentimentMeta.textContent = "Model will return label & confidence.";
+        keywordsList.textContent = "No keywords yet.";
+      }
+
+      async function callAPI(endpoint) {
+        const text = inputText.value.trim();
+        if (!text) {
+          alert("Please enter some text first.");
+          return;
+        }
+
+        // UI feedback
+        showSpinner(
+          endpoint === "analyze_all" ? "Analyzing all…" : "Analyzing…"
+        );
+        // Disable buttons briefly
+        const buttons = document.querySelectorAll(".btn");
+        buttons.forEach(
+          (b) => (b.disabled = true),
+          (b) => (b.style.opacity = 0.6)
+        );
+
+        try {
+          const res = await fetch(`/${endpoint}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text }),
+          });
+          const data = await res.json();
+          hideSpinner();
+          buttons.forEach(
+            (b) => (b.disabled = false),
+            (b) => (b.style.opacity = 1)
+          );
+
+          if (res.status !== 200) {
+            const err = data.error || "Server error";
+            alert("Error: " + err);
+            return;
+          }
+
+          // Update UI based on endpoint
+          if (endpoint === "summarize") {
+            summaryText.textContent = data.summary;
+          } else if (endpoint === "sentiment") {
+            sentimentLabel.textContent = data.sentiment.label;
+            sentimentMeta.textContent = `Confidence: ${(
+              data.sentiment.score * 100
+            ).toFixed(2)}%`;
+          } else if (endpoint === "keywords") {
+            keywordsList.textContent = data.keywords.length
+              ? data.keywords.join(", ")
+              : "No keywords found.";
+          } else if (endpoint === "analyze_all") {
+            summaryText.textContent = data.summary;
+            sentimentLabel.textContent = data.sentiment.label;
+            sentimentMeta.textContent = `Confidence: ${(
+              data.sentiment.score * 100
+            ).toFixed(2)}%`;
+            keywordsList.textContent = data.keywords.length
+              ? data.keywords.join(", ")
+              : "No keywords found.";
+          }
+          loadHistory(); // Refresh history after each request
+        } catch (err) {
+          hideSpinner();
+          buttons.forEach((b) => (b.disabled = false));
+          console.error(err);
+          alert("Request failed — see console for details.");
+        }
+      }
+      async function loadHistory() {
+        try {
+          const res = await fetch("/history");
+          const data = await res.json();
+          if (!data.length) {
+            document.getElementById("historyList").textContent =
+              "No history yet.";
+            return;
+          }
+          let html = "<ul style='padding-left:18px;margin:0'>";
+          data.forEach((item, idx) => {
+            html += `<li style="cursor:pointer" onclick="useHistory(${idx})">
+        <strong>${item.type}</strong> — ${item.input.slice(0, 40)}...
+      </li>`;
+          });
+          html += "</ul>";
+          document.getElementById("historyList").innerHTML = html;
+        } catch (err) {
+          console.error("Failed to load history", err);
+        }
+      }
+
+      async function useHistory(index) {
+        const res = await fetch("/history");
+        const data = await res.json();
+        if (data[index]) {
+          document.getElementById("inputText").value = data[index].input;
+        }
+      }
+
+      // Load history when page loads
+      window.addEventListener("load", loadHistory);
+    </script>
+  </body>
+</html>
